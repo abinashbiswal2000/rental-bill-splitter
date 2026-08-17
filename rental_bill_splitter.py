@@ -47,59 +47,53 @@ if "result_df" not in st.session_state:
 # ---------------------------------------------------------------------------
 with st.form("bill_form"):
     st.subheader("1. Room Meter Readings & Occupancy")
-    st.write(
-        "Edit the table directly. Rooms 11, 12 and 13's electricity is billed "
-        "together with the water bill."
-    )
 
-    default_data = pd.DataFrame(
-        {
-            "Room Number": ROOMS,
-            "Previous Month Units": [0] * 13,
-            "This Month Units": [0] * 13,
-            "Number of People": [1] * 13,
-        }
-    )
+    previousMonth = {}
+    thisMonth = {}
+    numberOfPeopleAsPerHouse = {}
 
-    edited_df = st.data_editor(
-        default_data,
-        column_config={
-            "Room Number": st.column_config.NumberColumn(disabled=True),
-            "Previous Month Units": st.column_config.NumberColumn(min_value=0, step=1),
-            "This Month Units": st.column_config.NumberColumn(min_value=0, step=1),
-            "Number of People": st.column_config.NumberColumn(min_value=0, step=1),
-        },
-        hide_index=True,
-        use_container_width=True,
-        num_rows="fixed",
-        key="room_editor",
-    )
+    st.markdown("**Enter Previous Month Details**")
+    for room in ROOMS:
+        previousMonth[room] = st.number_input(
+            f"Room {room} (Previous Month)",
+            min_value=0, value=None, step=1,
+            key=f"prev_{room}",
+        )
+
+    st.markdown("**Enter This Month Details**")
+    for room in ROOMS:
+        thisMonth[room] = st.number_input(
+            f"Room {room} (This Month)",
+            min_value=0, value=None, step=1,
+            key=f"this_{room}",
+        )
+
+    st.markdown("**Enter Number of People**")
+    for room in ROOMS:
+        numberOfPeopleAsPerHouse[room] = st.number_input(
+            f"Room {room} (Number of Occupants)",
+            min_value=0, value=None, step=1,
+            key=f"people_{room}",
+        )
 
     st.subheader("2. Utility Bills")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        waterBill = st.number_input(
-            "Water Bill (Rs.)",
-            min_value=0.0, value=0.0, step=1.0,
-            help="Includes electricity for rooms 11, 12, 13 and water for all rooms.",
-        )
-    with col2:
-        bill2 = st.number_input("Electricity Bill 2 (Rs.)", min_value=0.0, value=0.0, step=1.0)
-    with col3:
-        bill3 = st.number_input("Electricity Bill 3 (Rs.)", min_value=0.0, value=0.0, step=1.0)
+    waterBill = st.number_input(
+        "Water Bill (Rs.)",
+        min_value=0.0, value=None, step=1.0,
+        help="Includes electricity for rooms 11, 12, 13 and water for all rooms.",
+    )
+    bill2 = st.number_input("Electricity Bill 2 (Rs.)", min_value=0.0, value=None, step=1.0)
+    bill3 = st.number_input("Electricity Bill 3 (Rs.)", min_value=0.0, value=None, step=1.0)
 
     unitsConsumedInWaterBill = st.number_input(
         "Units Consumed shown on Water Bill",
-        min_value=0.0, value=0.0, step=1.0,
+        min_value=0.0, value=None, step=1.0,
         help="Combined meter units (electricity for 11/12/13 + water for all rooms).",
     )
 
     st.subheader("3. Pricing Rules")
-    col4, col5 = st.columns(2)
-    with col4:
-        base_cap = st.number_input("Base unit cap", min_value=0, value=100, step=1)
-    with col5:
-        base_rate = st.number_input("Base rate per unit (Rs.)", min_value=0.0, value=5.0, step=0.5)
+    base_cap = st.number_input("Base unit cap", min_value=0, value=100, step=1)
+    base_rate = st.number_input("Base rate per unit (Rs.)", min_value=0.0, value=5.0, step=0.5)
 
     submitted = st.form_submit_button("Calculate", use_container_width=True)
 
@@ -107,36 +101,77 @@ with st.form("bill_form"):
 # CALCULATION
 # ---------------------------------------------------------------------------
 if submitted:
+    # -----------------------------------------------------------------------
+    # VALIDATE REQUIRED INPUTS
+    # -----------------------------------------------------------------------
+
+    missing_fields = []
+
+    for room in ROOMS:
+        if previousMonth[room] is None:
+            missing_fields.append(f"Room {room} - Previous Month Units")
+
+        if thisMonth[room] is None:
+            missing_fields.append(f"Room {room} - This Month Units")
+
+        if numberOfPeopleAsPerHouse[room] is None:
+            missing_fields.append(f"Room {room} - Number of Occupants")
+
+    if waterBill is None:
+        missing_fields.append("Water Bill")
+
+    if bill2 is None:
+        missing_fields.append("Electricity Bill 2")
+
+    if bill3 is None:
+        missing_fields.append("Electricity Bill 3")
+
+    if unitsConsumedInWaterBill is None:
+        missing_fields.append("Units Consumed shown on Water Bill")
+
+    # Stop before any calculation if something is missing
+    if missing_fields:
+        st.error("Please fill in all required fields before calculating.")
+
+        st.warning(
+            "Missing fields:\n\n" +
+            "\n".join(f"- {field}" for field in missing_fields)
+        )
+
+        st.stop()
+
+    # -----------------------------------------------------------------------
+    # CALCULATION
+    # -----------------------------------------------------------------------
+
     try:
-        df_input = edited_df.copy()
-        df_input["Room Number"] = df_input["Room Number"].astype(int)
-
-        previousMonth = dict(zip(df_input["Room Number"], df_input["Previous Month Units"]))
-        thisMonth = dict(zip(df_input["Room Number"], df_input["This Month Units"]))
-        numberOfPeopleAsPerHouse = dict(zip(df_input["Room Number"], df_input["Number of People"]))
-
         # Basic sanity check
         bad_rooms = [r for r in ROOMS if thisMonth[r] < previousMonth[r]]
+
         if bad_rooms:
             st.error(
-                f"Room(s) {bad_rooms}: 'This Month Units' is less than 'Previous Month Units'. "
-                "Please check the readings."
+                f"Room(s) {bad_rooms}: 'This Month Units' is less than "
+                "'Previous Month Units'. Please check the readings."
             )
             st.stop()
 
         totalBill = waterBill + bill2 + bill3
 
         elec_units_in_water_bill = sum(
-            thisMonth[r] - previousMonth[r] for r in ELECTRICITY_ROOMS_IN_WATER_BILL
+            thisMonth[r] - previousMonth[r]
+            for r in ELECTRICITY_ROOMS_IN_WATER_BILL
         )
+
         totalWaterUnits = unitsConsumedInWaterBill - elec_units_in_water_bill
 
         # Build per-room rows
         data = []
+
         for room in ROOMS:
             previous_units = previousMonth[room]
             this_units = thisMonth[room]
             units_consumed = this_units - previous_units
+
             data.append(
                 {
                     "Room Number": room,
@@ -160,30 +195,62 @@ if submitted:
 
         df = pd.DataFrame(data)
 
-        df["Base Units"] = df["Units Consumed"].apply(lambda x: min(base_cap, x))
+        df["Base Units"] = df["Units Consumed"].apply(
+            lambda x: min(base_cap, x)
+        )
+
         df["Extra Units"] = df["Units Consumed"] - df["Base Units"]
         df["Base Price"] = df["Base Units"] * base_rate
 
         extraBill = totalBill - df["Base Price"].sum()
         totalExtraUnits = df["Extra Units"].sum()
-        amountPerExtraUnit = (extraBill / totalExtraUnits) if totalExtraUnits else 0.0
+
+        amountPerExtraUnit = (
+            extraBill / totalExtraUnits
+            if totalExtraUnits
+            else 0.0
+        )
 
         df["Extra Price"] = amountPerExtraUnit * df["Extra Units"]
 
         water_row = df[df["Room Number"] == "Water"].iloc[0]
-        totalWaterBill = water_row["Base Price"] + water_row["Extra Price"]
+
+        totalWaterBill = (
+            water_row["Base Price"] +
+            water_row["Extra Price"]
+        )
 
         total_people = df["Number of People"].sum()
-        waterBillPerPerson = (totalWaterBill / total_people) if total_people else 0.0
 
-        df["Water Bill"] = waterBillPerPerson * df["Number of People"]
+        waterBillPerPerson = (
+            totalWaterBill / total_people
+            if total_people
+            else 0.0
+        )
 
-        df = df[df["Room Number"] != "Water"].reset_index(drop=True)
+        df["Water Bill"] = (
+            waterBillPerPerson *
+            df["Number of People"]
+        )
 
-        df["Total Bill"] = df["Base Price"] + df["Extra Price"] + df["Water Bill"]
-        df["Final Price"] = np.ceil(df["Total Bill"]).astype(int)
+        df = df[
+            df["Room Number"] != "Water"
+        ].reset_index(drop=True)
 
-        st.session_state.result_df = df[["Room Number", "Final Price"]].copy()
+        df["Total Bill"] = (
+            df["Base Price"] +
+            df["Extra Price"] +
+            df["Water Bill"]
+        )
+
+        df["Final Price"] = np.ceil(
+            df["Total Bill"]
+        ).astype(int)
+
+        st.session_state.result_df = df[
+            ["Room Number", "Final Price"]
+        ].copy()
+
         st.session_state.full_df = df.copy()
         st.session_state.totalBill = totalBill
         st.session_state.totalWaterUnits = totalWaterUnits
