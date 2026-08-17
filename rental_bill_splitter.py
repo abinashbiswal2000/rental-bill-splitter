@@ -27,13 +27,14 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import streamlit.components.v1 as components
+from datetime import datetime
 
 ROOMS = list(range(1, 14))
 ELECTRICITY_ROOMS_IN_WATER_BILL = (11, 12, 13)
 
 st.set_page_config(page_title="Rental Utility Bill Splitter", layout="wide")
 
-st.title("🏠 Rental Utility Bill Splitter")
+st.title("Rental Utility Bill Splitter")
 st.caption(
     "Enter meter readings, occupancy, and bill amounts below. "
     "The app calculates each room's final share automatically."
@@ -264,7 +265,7 @@ if submitted:
 # ---------------------------------------------------------------------------
 if st.session_state.result_df is not None:
     st.divider()
-    st.subheader("📋 Final Bill per Room")
+    st.subheader(f"Utility Bill - {datetime.now().strftime('%B %Y')}")
 
     result_display = st.session_state.result_df.rename(
         columns={"Final Price": "Amount Due (Rs.)"}
@@ -283,7 +284,7 @@ if st.session_state.result_df is not None:
         st.dataframe(st.session_state.full_df, use_container_width=True)
 
     st.divider()
-    if st.button("🖨️ Print / Save as PDF"):
+    if st.button("Print / Save as PDF"):
         components.html("<script>window.parent.print();</script>", height=0)
     st.caption(
         "Clicking Print opens your browser's print dialog — choose "
