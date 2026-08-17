@@ -48,49 +48,55 @@ if "result_df" not in st.session_state:
 with st.form("bill_form"):
     st.subheader("1. Room Meter Readings & Occupancy")
     st.write(
-        "Edit the table directly. Rooms 11, 12 and 13's electricity is billed "
-        "together with the water bill."
+        "Rooms 11, 12 and 13's electricity is billed together with the water bill. "
+        "All fields below are plain number boxes, so phones show the numeric keypad."
     )
 
-    default_data = pd.DataFrame(
-        {
-            "Room Number": ROOMS,
-            "Previous Month Units": [0] * 13,
-            "This Month Units": [0] * 13,
-            "Number of People": [1] * 13,
-        }
-    )
+    header = st.columns([1, 2, 2, 1.5])
+    header[0].markdown("**Room**")
+    header[1].markdown("**Previous Month**")
+    header[2].markdown("**This Month**")
+    header[3].markdown("**People**")
 
-    edited_df = st.data_editor(
-        default_data,
-        column_config={
-            "Room Number": st.column_config.NumberColumn(disabled=True),
-            "Previous Month Units": st.column_config.NumberColumn(min_value=0, step=1),
-            "This Month Units": st.column_config.NumberColumn(min_value=0, step=1),
-            "Number of People": st.column_config.NumberColumn(min_value=0, step=1),
-        },
-        hide_index=True,
-        use_container_width=True,
-        num_rows="fixed",
-        key="room_editor",
-    )
+    previousMonth = {}
+    thisMonth = {}
+    numberOfPeopleAsPerHouse = {}
+
+    for room in ROOMS:
+        c1, c2, c3, c4 = st.columns([1, 2, 2, 1.5])
+        c1.markdown(f"**{room}**")
+        previousMonth[room] = c2.number_input(
+            f"Previous Month Units - Room {room}",
+            min_value=0, value=0, step=1,
+            key=f"prev_{room}", label_visibility="collapsed",
+        )
+        thisMonth[room] = c3.number_input(
+            f"This Month Units - Room {room}",
+            min_value=0, value=0, step=1,
+            key=f"this_{room}", label_visibility="collapsed",
+        )
+        numberOfPeopleAsPerHouse[room] = c4.number_input(
+            f"Number of People - Room {room}",
+            min_value=0, value=1, step=1,
+            key=f"people_{room}", label_visibility="collapsed",
+        )
 
     st.subheader("2. Utility Bills")
     col1, col2, col3 = st.columns(3)
     with col1:
         waterBill = st.number_input(
             "Water Bill (Rs.)",
-            min_value=0.0, value=0.0, step=1.0,
+            min_value=0, value=0, step=1,
             help="Includes electricity for rooms 11, 12, 13 and water for all rooms.",
         )
     with col2:
-        bill2 = st.number_input("Electricity Bill 2 (Rs.)", min_value=0.0, value=0.0, step=1.0)
+        bill2 = st.number_input("Electricity Bill 2 (Rs.)", min_value=0, value=0, step=1)
     with col3:
-        bill3 = st.number_input("Electricity Bill 3 (Rs.)", min_value=0.0, value=0.0, step=1.0)
+        bill3 = st.number_input("Electricity Bill 3 (Rs.)", min_value=0, value=0, step=1)
 
     unitsConsumedInWaterBill = st.number_input(
         "Units Consumed shown on Water Bill",
-        min_value=0.0, value=0.0, step=1.0,
+        min_value=0, value=0, step=1,
         help="Combined meter units (electricity for 11/12/13 + water for all rooms).",
     )
 
@@ -108,13 +114,6 @@ with st.form("bill_form"):
 # ---------------------------------------------------------------------------
 if submitted:
     try:
-        df_input = edited_df.copy()
-        df_input["Room Number"] = df_input["Room Number"].astype(int)
-
-        previousMonth = dict(zip(df_input["Room Number"], df_input["Previous Month Units"]))
-        thisMonth = dict(zip(df_input["Room Number"], df_input["This Month Units"]))
-        numberOfPeopleAsPerHouse = dict(zip(df_input["Room Number"], df_input["Number of People"]))
-
         # Basic sanity check
         bad_rooms = [r for r in ROOMS if thisMonth[r] < previousMonth[r]]
         if bad_rooms:
